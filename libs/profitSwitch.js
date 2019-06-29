@@ -4,11 +4,14 @@ var bignum = require('bignum');
 var algos  = require('stratum-pool/lib/algoProperties.js');
 var util   = require('stratum-pool/lib/util.js');
 
-var Cryptsy  = require('./apiCryptsy.js');
+var Crex24  = require('./apiCrex24.js');
 var Poloniex = require('./apiPoloniex.js');
-var Mintpal  = require('./apiMintpal.js');
+var Stex     = require('./apiStex.js');
 var Bittrex  = require('./apiBittrex.js');
 var Stratum  = require('stratum-pool');
+
+var mysql = require('mysql');
+
 
 module.exports = function(logger){
 
@@ -69,11 +72,11 @@ module.exports = function(logger){
         // 'API_KEY',
         // 'API_SECRET'
     );
-    var cryptsyApi =  new Cryptsy(
+    var Crex24Api =  new Crex24(
         // 'API_KEY',
         // 'API_SECRET'
     );
-    var mintpalApi =  new Mintpal(
+    var StexApi =  new Stex(
         // 'API_KEY',
         // 'API_SECRET'
     );
@@ -199,134 +202,38 @@ module.exports = function(logger){
         });
     };
 
-    
-    this.getProfitDataCryptsy = function(callback){
+    this.getProfitDataCrex24 = function(callback){
         async.series([
             function(taskCallback){
-                cryptsyApi.getTicker(function(err, data){
-                    if (err || data.success != 1){
+                Crex24Api.getTicker(function(err, response){
+                    if (err){
                         taskCallback(err);
                         return;
                     }
 
                     Object.keys(symbolToAlgorithmMap).forEach(function(symbol){
-                        var exchangeInfo = profitStatus[symbolToAlgorithmMap[symbol]][symbol].exchangeInfo;
-                        if (!exchangeInfo.hasOwnProperty('Cryptsy'))
-                            exchangeInfo['Cryptsy'] = {};
+                        response.forEach(function(market){
+                            var exchangeInfo = profitStatus[symbolToAlgorithmMap[symbol]][symbol].exchangeInfo;
+                            if (!exchangeInfo.hasOwnProperty('Crex24'))
+                                exchangeInfo['Crex24'] = {};
 
-                        var marketData = exchangeInfo['Cryptsy'];
-                        var results    = data.return.markets;
-
-                        if (results && results.hasOwnProperty(symbol + '/BTC')) {
-                            if (!marketData.hasOwnProperty('BTC'))
+                            var marketData = exchangeInfo['Crex24'];
+                            var marketPair = market.instrument.match(/([\w]+)-([\w-_]+)/)
+                            market.exchange = marketPair[1]
+                            market.code = marketPair[2]
+				//console.log('CREX Api Marketpair exchange' + JSON.stringify(market.exchange));
+				//console.log('CREX Api Marketpair code ' + JSON.stringify(market.code));
+                            //if (market.exchange == 'BTC' && market.code == symbol) {
+                                //if (!marketData.hasOwnProperty('BTC'))
                                 marketData['BTC'] = {};
 
-                            var btcData = results[symbol + '/BTC'];
-                            marketData['BTC'].last = new Number(btcData.lasttradeprice);
-                            marketData['BTC'].baseVolume = new Number(marketData['BTC'].last / btcData.volume);
-                            marketData['BTC'].quoteVolume = new Number(btcData.volume);
-                            if (btcData.sellorders != null)
-                                marketData['BTC'].ask = new Number(btcData.sellorders[0].price);
-                            if (btcData.buyorders != null) {
-                                marketData['BTC'].bid = new Number(btcData.buyorders[0].price);
-                                var limit = new Number(marketData['BTC'].bid * portalConfig.profitSwitch.depth);
-                                var depth = new Number(0);
-                                var totalQty = new Number(0);
-                                btcData['buyorders'].forEach(function(order){
-                                    var price = new Number(order.price);
-                                    var qty = new Number(order.quantity);
-                                    if (price >= limit){
-                                        depth += (qty * price);
-                                        totalQty += qty;
-                                    }
-                               });
-                               marketData['BTC'].depth = depth;
-                               if (totalQty > 0)
-                                   marketData['BTC'].weightedBid = new Number(depth / totalQty);
-                           }
-                        }
-
-                        if (results && results.hasOwnProperty(symbol + '/LTC')) {
-                            if (!marketData.hasOwnProperty('LTC'))
-                                marketData['LTC'] = {};
-
-                            var ltcData = results[symbol + '/LTC'];
-                            marketData['LTC'].last = new Number(ltcData.lasttradeprice);
-                            marketData['LTC'].baseVolume = new Number(marketData['LTC'].last / ltcData.volume);
-                            marketData['LTC'].quoteVolume = new Number(ltcData.volume);
-                            if (ltcData.sellorders != null)
-                                marketData['LTC'].ask = new Number(ltcData.sellorders[0].price);
-                            if (ltcData.buyorders != null) {
-                                marketData['LTC'].bid = new Number(ltcData.buyorders[0].price);
-                                var limit = new Number(marketData['LTC'].bid * portalConfig.profitSwitch.depth);
-                                var depth = new Number(0);
-                                var totalQty = new Number(0);
-                                ltcData['buyorders'].forEach(function(order){
-                                    var price = new Number(order.price);
-                                    var qty = new Number(order.quantity);
-                                    if (price >= limit){
-                                        depth += (qty * price);
-                                        totalQty += qty;
-                                    }
-                               });
-                               marketData['LTC'].depth = depth;
-                               if (totalQty > 0)
-                                   marketData['LTC'].weightedBid = new Number(depth / totalQty);
-                           }
-                        }
-                    });
-                    taskCallback();
-                });
-            }
-        ], function(err){
-            if (err){
-                callback(err);
-                return;
-            }
-            callback(null);
-        });
-        
-    };
-
-
-    this.getProfitDataMintpal = function(callback){
-        async.series([
-            function(taskCallback){
-                mintpalApi.getTicker(function(err, response){
-                    if (err || !response.data){
-                        taskCallback(err);
-                        return;
-                    }
-
-                    Object.keys(symbolToAlgorithmMap).forEach(function(symbol){
-                        response.data.forEach(function(market){
-                            var exchangeInfo = profitStatus[symbolToAlgorithmMap[symbol]][symbol].exchangeInfo;
-                            if (!exchangeInfo.hasOwnProperty('Mintpal'))
-                                exchangeInfo['Mintpal'] = {};
-
-                            var marketData = exchangeInfo['Mintpal'];
-
-                            if (market.exchange == 'BTC' && market.code == symbol) {
-                                if (!marketData.hasOwnProperty('BTC'))
-                                    marketData['BTC'] = {};
-
-                                marketData['BTC'].last = new Number(market.last_price);
-                                marketData['BTC'].baseVolume = new Number(market['24hvol']);
-                                marketData['BTC'].quoteVolume = new Number(market['24hvol'] / market.last_price);
-                                marketData['BTC'].ask = new Number(market.top_ask);
-                                marketData['BTC'].bid = new Number(market.top_bid);
-                            }
-
-                            if (market.exchange == 'LTC' && market.code == symbol) {
-                                if (!marketData.hasOwnProperty('LTC'))
-                                    marketData['LTC'] = {};
-
-                                marketData['LTC'].last = new Number(market.last_price);
-                                marketData['LTC'].baseVolume = new Number(market['24hvol']);
-                                marketData['LTC'].quoteVolume = new Number(market['24hvol'] / market.last_price);
-                                marketData['LTC'].ask = new Number(market.top_ask);
-                                marketData['LTC'].bid = new Number(market.top_bid);
-                            }
+                                marketData['BTC'].ask = new Number(market.ask);
+				//console.log('CREX Api vraagprijs' + JSON.stringify(market.ask));
+                                marketData['BTC'].baseVolume = new Number(market.baseVolume);
+                                marketData['BTC'].quoteVolume = new Number(market.quoteVolume);
+                                marketData['BTC'].bid = new Number(market.bid);
+                                marketData['BTC'].last = new Number(market.last);
+                            //}
 
                         });
                     });
@@ -336,15 +243,10 @@ module.exports = function(logger){
             function(taskCallback){
                 var depthTasks = [];
                 Object.keys(symbolToAlgorithmMap).forEach(function(symbol){
-                    var marketData = profitStatus[symbolToAlgorithmMap[symbol]][symbol].exchangeInfo['Mintpal'];
+                    var marketData = profitStatus[symbolToAlgorithmMap[symbol]][symbol].exchangeInfo['Crex24'];
                     if (marketData.hasOwnProperty('BTC') && marketData['BTC'].bid > 0){
                         depthTasks.push(function(callback){
-                            _this.getMarketDepthFromMintpal('BTC', symbol, marketData['BTC'].bid, callback) 
-                        });
-                    }
-                    if (marketData.hasOwnProperty('LTC') && marketData['LTC'].bid > 0){
-                        depthTasks.push(function(callback){
-                            _this.getMarketDepthFromMintpal('LTC', symbol, marketData['LTC'].bid, callback) 
+                            _this.getMarketDepthFromCrex24('BTC', symbol, marketData['BTC'].bid, callback) 
                         });
                     }
                 });
@@ -369,28 +271,151 @@ module.exports = function(logger){
             callback(null);
         });
     };
-    this.getMarketDepthFromMintpal = function(symbolA, symbolB, coinPrice, callback){
-        mintpalApi.getBuyOrderBook(symbolA, symbolB, function(err, response){
+    this.getMarketDepthFromCrex24 = function(symbolA, symbolB, coinPrice, callback){
+
+       Crex24Api.getOrderBook(symbolA, symbolB, function(err, response){
+
             if (err){
                 callback(err);
                 return;
             }
             var depth = new Number(0);
-            if (response.hasOwnProperty('data')){
+            if (response.hasOwnProperty('buyLevels')){
                 var totalQty = new Number(0);
-                response['data'].forEach(function(order){
+                //response['result'].forEach(function(order){
+		Array.from(response['buyLevels']).forEach(function(order){
+                     //console.log('CREX Api Order exchange' + JSON.stringify(order.price));
+                     //console.log('CREX Api Order code ' + JSON.stringify(order.volume));
                     var price = new Number(order.price);
                     var limit = new Number(coinPrice * portalConfig.profitSwitch.depth);
-                    var qty = new Number(order.amount);
+                    var qty = new Number(order.volume);
                     // only measure the depth down to configured depth
-                    if (price >= limit){
+                    //if (price >= limit){
                        depth += (qty * price);
                        totalQty += qty;
-                    }
+                    //}
+
+                     console.log('CREX Api Order depth' + JSON.stringify(depth));
+                     console.log('CREX Api Order qty' + JSON.stringify(totalQty));
                 });
             }
 
-            var marketData = profitStatus[symbolToAlgorithmMap[symbolB]][symbolB].exchangeInfo['Mintpal'];
+            var marketData = profitStatus[symbolToAlgorithmMap[symbolB]][symbolB].exchangeInfo['Crex24'];
+            marketData[symbolA].depth = depth;
+            if (totalQty > 0)
+                marketData[symbolA].weightedBid = new Number(depth / totalQty);
+            callback();
+        });
+    };
+
+
+   this.getProfitDataStex = function(callback){
+        async.series([
+            function(taskCallback){
+                StexApi.getTicker(function(err, response){
+                    if (err){
+                        taskCallback(err);
+                        return;
+                    }
+
+                    Object.keys(symbolToAlgorithmMap).forEach(function(symbol){
+                        response.forEach(function(market){
+                            var exchangeInfo = profitStatus[symbolToAlgorithmMap[symbol]][symbol].exchangeInfo;
+                            if (!exchangeInfo.hasOwnProperty('Stex'))
+                                exchangeInfo['Stex'] = {};
+
+                            var marketData = exchangeInfo['Stex'];
+                            var marketPair = market.market_name.match(/([\w]+)_([\w-_]+)/)
+                            market.exchange = marketPair[1]
+                            market.code = marketPair[2]
+				//console.log('CREX Api Marketpair exchange' + JSON.stringify(market.exchange));
+				//console.log('CREX Api Marketpair code ' + JSON.stringify(market.code));
+                            //if (market.exchange == 'BTC' && market.code == symbol) {
+                                //if (!marketData.hasOwnProperty('BTC'))
+                                marketData['BTC'] = {};
+
+                                marketData['BTC'].ask = new Number(market.ask);
+				//console.log('CREX Api vraagprijs' + JSON.stringify(market.ask));
+                                marketData['BTC'].baseVolume = new Number(market.vol);
+                                marketData['BTC'].quoteVolume = new Number(market.vol);
+                                marketData['BTC'].bid = new Number(market.bid);
+                                marketData['BTC'].last = new Number(market.last);
+                            //}
+
+                        });
+                    });
+                    taskCallback();
+                });
+            },
+            function(taskCallback){
+                var depthTasks = [];
+                Object.keys(symbolToAlgorithmMap).forEach(function(symbol){
+                    var marketData = profitStatus[symbolToAlgorithmMap[symbol]][symbol].exchangeInfo['Stex'];
+                    //if (marketData.hasOwnProperty('BTC') && marketData['BTC'].bid > 0){
+                        depthTasks.push(function(callback){
+                            _this.getMarketDepthFromStex('BTC', symbol, marketData['BTC'].bid, callback) 
+                        });
+                    //}
+                });
+
+                if (!depthTasks.length){
+                    taskCallback();
+                    return;
+                }
+                async.series(depthTasks, function(err){
+                    if (err){
+                        taskCallback(err);
+                        return;
+                    }
+                    taskCallback();
+                });
+            }
+        ], function(err){
+            if (err){
+                callback(err);
+                return;
+            }
+            callback(null);
+        });
+    };
+    this.getMarketDepthFromStex = function(symbolA, symbolB, coinPrice, callback){
+
+       StexApi.getOrderBook(symbolA, symbolB, function(err, response){
+
+            if (err){
+                callback(err);
+                return;
+            }
+            var depth = new Number(0);
+            if (response.hasOwnProperty('result')){
+                var totalQty = new Number(0);
+                //response['result'].forEach(function(order){
+		//Array.from(response['result']['buy']).forEach(function(order){
+		
+
+		var Stex1 = Array.from(response['result']['buy']);
+
+		var Stex = Stex1.slice(0, 1);;	
+
+		Array.from(Stex).forEach(function(order){
+
+                     console.log('STEX Api Order exchange' + JSON.stringify(order.Rate));
+                     console.log('STEX Api Order code ' + JSON.stringify(order.Quantity));
+                    var price = new Number(order.Rate);
+                    var limit = new Number(coinPrice * portalConfig.profitSwitch.depth);
+                    var qty = new Number(order.Quantity);
+                    // only measure the depth down to configured depth
+                    //if (price >= limit){
+                       depth += (qty * price);
+                       totalQty += qty;
+                    //}
+
+                     console.log('STEX Api Order depth' + JSON.stringify(depth));
+                     console.log('STEX Api Order qty' + JSON.stringify(totalQty));
+                });
+            }
+
+            var marketData = profitStatus[symbolToAlgorithmMap[symbolB]][symbolB].exchangeInfo['Stex'];
             marketData[symbolA].depth = depth;
             if (totalQty > 0)
                 marketData[symbolA].weightedBid = new Number(depth / totalQty);
@@ -542,6 +567,7 @@ module.exports = function(logger){
             callback(null); // fail gracefully for each coin
         });
 
+
         daemon.cmd('getblocktemplate', [{"capabilities": [ "coinbasetxn", "workid", "coinbase/append" ]}], function(result) {
             if (result[0].error != null) {
                 logger.error(logSystem, symbol, 'Error while reading daemon info: ' + JSON.stringify(result[0]));
@@ -557,6 +583,13 @@ module.exports = function(logger){
             logger.debug(logSystem, symbol, 'difficulty is ' + coinStatus.difficulty);
 
             coinStatus.reward = response.coinbasevalue / 100000000;
+
+	    if (symbol.includes('zer')) { coinStatus.reward = "9.9"; }
+	    if (symbol.includes('vdl')) { coinStatus.reward = "4.8"; }
+	    if (symbol.includes('safe')) { coinStatus.reward = "4"; }
+	    if (symbol.includes('genx')) { coinStatus.reward = "350"; }
+
+            logger.debug(logSystem, symbol, 'Reward is ' + coinStatus.reward);
             callback(null);
         });
     };
@@ -569,6 +602,8 @@ module.exports = function(logger){
                 var coinStatus = profitStatus[symbolToAlgorithmMap[symbol]][symbol];
                 coinStatus.blocksPerMhPerHour = 86400 / ((coinStatus.difficulty * Math.pow(2,32)) / (1 * 1000 * 1000));
                 coinStatus.coinsPerMhPerHour = coinStatus.reward * coinStatus.blocksPerMhPerHour;
+                logger.debug(logSystem, symbol, 'blocks per hour is ' + coinStatus.blocksPerMhPerHour);
+                logger.debug(logSystem, symbol, 'coins per hour is ' + coinStatus.coinsPerMhPerHour);
             });
         });
         callback(null);
@@ -590,6 +625,7 @@ module.exports = function(logger){
                     var exchangeData = coinStatus.exchangeInfo[exchange];
                     if (exchangeData.hasOwnProperty('BTC') && exchangeData['BTC'].hasOwnProperty('weightedBid')){
                         var btcPerMhPerHour = exchangeData['BTC'].weightedBid * coinStatus.coinsPerMhPerHour;
+                	logger.debug(logSystem, symbol, 'Bid is ' + exchangeData['BTC'].weightedBid);
                         if (btcPerMhPerHour > bestBtcPerMhPerHour){
                             bestBtcPerMhPerHour = btcPerMhPerHour;
                             bestExchange = exchange;
@@ -637,11 +673,11 @@ module.exports = function(logger){
         if (portalConfig.profitSwitch.usePoloniex)
             profitabilityTasks.push(_this.getProfitDataPoloniex);
 
-        if (portalConfig.profitSwitch.useCryptsy)
-            profitabilityTasks.push(_this.getProfitDataCryptsy);
+        if (portalConfig.profitSwitch.useCrex24)
+            profitabilityTasks.push(_this.getProfitDataCrex24);
 
-        if (portalConfig.profitSwitch.useMintpal)
-            profitabilityTasks.push(_this.getProfitDataMintpal);
+        if (portalConfig.profitSwitch.useStex)
+            profitabilityTasks.push(_this.getProfitDataStex);
 
         if (portalConfig.profitSwitch.useBittrex)
             profitabilityTasks.push(_this.getProfitDataBittrex);
