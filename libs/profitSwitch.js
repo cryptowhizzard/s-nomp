@@ -317,6 +317,10 @@ module.exports = function(logger){
                         taskCallback(err);
                         return;
                     }
+                    if (!response.isArray()){
+                        taskCallback(Error('Did not receive data from Stex. Response: ' + response));
+                        return;
+                    }
 
                     Object.keys(symbolToAlgorithmMap).forEach(function(symbol){
                         response.forEach(function(market){
