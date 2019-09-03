@@ -210,6 +210,10 @@ module.exports = function(logger){
                         taskCallback(err);
                         return;
                     }
+                    if (!Array.isArray(response)){
+                        taskCallback(Error('Did not receive data from Crex24. Response: ' + response));
+                        return;
+                    }
 
                     Object.keys(symbolToAlgorithmMap).forEach(function(symbol){
                         response.forEach(function(market){
@@ -317,7 +321,7 @@ module.exports = function(logger){
                         taskCallback(err);
                         return;
                     }
-                    if (!response.isArray()){
+                    if (!Array.isArray(response)){
                         taskCallback(Error('Did not receive data from Stex. Response: ' + response));
                         return;
                     }
@@ -434,6 +438,10 @@ module.exports = function(logger){
                 bittrexApi.getTicker(function(err, response){
                     if (err || !response.result){
                         taskCallback(err);
+                        return;
+                    }
+                    if (!Array.isArray(response.result)){
+                        taskCallback(Error('Did not receive data from Bittrex. Response: ' + response));
                         return;
                     }
 
